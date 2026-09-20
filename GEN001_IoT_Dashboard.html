@@ -1,0 +1,83 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>GEN001 IoT Dashboard</title>
+<style>
+body{font-family:Arial,sans-serif;background:#f3f5f7;margin:0;padding:14px;color:#17202a}
+.wrap{max-width:900px;margin:auto} h1{font-size:22px;margin:8px 0}
+.sub{color:#667085;font-size:13px;margin-bottom:14px}
+.grid{display:grid;grid-template-columns:repeat(2,1fr);gap:10px}
+.card{background:#fff;border-radius:14px;padding:16px;box-shadow:0 2px 8px #00000012}
+.label{font-size:13px;color:#667085}.value{font-size:25px;font-weight:700;margin-top:7px}
+.ok{color:#16803c}.bad{color:#c62828}.small{font-size:12px;color:#667085}
+.full{grid-column:1/-1} input{width:100%;box-sizing:border-box;padding:10px;margin:5px 0 10px;border:1px solid #ccd3da;border-radius:8px}
+button{padding:10px 15px;border:0;border-radius:8px;cursor:pointer;background:#1f6feb;color:white}
+table{width:100%;border-collapse:collapse;font-size:12px}td,th{padding:7px;border-bottom:1px solid #eee;text-align:right}
+@media(max-width:600px){.grid{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+<div class="wrap">
+<h1>مولدة GEN001</h1>
+<div class="sub">MQTT Dashboard — ESP8266 / HiveMQ Cloud</div>
+<div class="card full">
+<div class="label">إعداد اتصال Dashboard</div>
+<input id="host" value="9e3642368d4f42ceb5ef0ac5816eed87.s1.eu.hivemq.cloud" placeholder="HiveMQ host">
+<input id="user" placeholder="MQTT username">
+<input id="pass" type="password" placeholder="MQTT password">
+<input id="topic" value="project_x_new/GEN001/data" placeholder="MQTT topic">
+<button id="connect">اتصال</button> <span id="conn" class="small">غير متصل</span>
+</div>
+<div class="grid" style="margin-top:10px">
+<div class="card"><div class="label">المولدة</div><div id="generator" class="value">—</div></div>
+<div class="card"><div class="label">الحساس</div><div id="sensor" class="value">—</div></div>
+<div class="card"><div class="label">آخر وقت قراءة</div><div id="time" class="value" style="font-size:17px">—</div></div>
+<div class="card"><div class="label">الحالة</div><div id="event" class="value" style="font-size:17px">—</div></div>
+<div class="card"><div class="label">LIVE ERROR</div><div id="live" class="value">0</div></div>
+<div class="card"><div class="label">TIME ERROR</div><div id="terr" class="value" style="font-size:19px">00:00:00</div></div>
+<div class="card"><div class="label">WIFI LOSS</div><div id="wifi" class="value">0</div></div>
+<div class="card"><div class="label">TIME W. LOSS</div><div id="twifi" class="value" style="font-size:19px">00:00:00</div></div>
+<div class="card"><div class="label">BASS</div><div id="bass" class="value ok">—</div></div>
+<div class="card full"><div class="label">آخر JSON مستلم</div><pre id="raw">—</pre></div>
+<div class="card full"><div class="label">Report — آخر الأحداث المستلمة</div>
+<table><thead><tr><th>الوقت</th><th>الحساس</th><th>المولدة</th><th>الحدث</th><th>Live</th><th>WiFi</th></tr></thead>
+<tbody id="rows"></tbody></table></div>
+</div></div>
+<script src="https://unpkg.com/mqtt/dist/mqtt.min.js"></script>
+<script>
+let client=null;
+const $=id=>document.getElementById(id);
+function addRow(d){
+ const tr=document.createElement('tr');
+ [d.time,d.sensor,d.generator,d.event,d.live_error,d.wifi_loss].forEach(v=>{
+  const td=document.createElement('td');td.textContent=v??'';tr.appendChild(td);
+ });
+ $('rows').prepend(tr);while($('rows').children.length>50)$('rows').lastChild.remove();
+}
+$('connect').onclick=()=>{
+ if(client)try{client.end(true)}catch(e){}
+ const host=$('host').value.trim(),user=$('user').value,pass=$('pass').value,topic=$('topic').value.trim();
+ if(!host||!user||!pass||!topic){$('conn').textContent='أدخل بيانات الاتصال';return}
+ client=mqtt.connect('wss://'+host+':8884/mqtt',{username:user,password:pass,clean:true,reconnectPeriod:3000});
+ client.on('connect',()=>{$('conn').textContent='متصل ✓';$('conn').className='small ok';client.subscribe(topic);});
+ client.on('reconnect',()=>{$('conn').textContent='إعادة اتصال...';});
+ client.on('error',e=>{$('conn').textContent='خطأ بالاتصال';console.error(e);});
+ client.on('close',()=>{$('conn').textContent='غير متصل';});
+ client.on('message',(t,p)=>{
+  try{
+   const d=JSON.parse(p.toString());
+   $('generator').textContent=d.generator??'—';
+   $('generator').className='value '+(d.generator==='ON'?'ok':d.generator==='OFF'?'bad':'');
+   $('sensor').textContent=d.sensor??'—';$('time').textContent=d.time??'—';
+   $('event').textContent=d.event??'—';$('live').textContent=d.live_error??0;
+   $('terr').textContent=d.time_error??'00:00:00';$('wifi').textContent=d.wifi_loss??0;
+   $('twifi').textContent=d.time_w_loss??'00:00:00';$('bass').textContent=d.bass??'—';
+   $('bass').className='value '+(d.bass==='OK'?'ok':'bad');
+   $('raw').textContent=JSON.stringify(d,null,2);addRow(d);
+  }catch(e){$('raw').textContent=p.toString();}
+ });
+};
+</script>
+</body></html>
